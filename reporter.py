@@ -1,6 +1,10 @@
 """
-reporter.py — Step 6
-- Adds summarize_csv(): count rows and list city names with temperatures
+reporter.py — Step 7 (polished)
+City Data Reporter: prompt for a city, fetch live weather from OpenWeatherMap,
+print a summary, write to CSV, and summarize the CSV contents.
+
+- PEP 8 naming and structure
+- Docstrings and type hints
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ CSV_PATH = Path("city_data.csv")
 
 
 def get_city_input() -> str:
+    """Prompt until a non-empty city name is entered."""
     while True:
         city = input("Enter a city name: ").strip()
         if city:
@@ -27,13 +32,21 @@ def get_city_input() -> str:
 
 
 def fetch_weather(city: str, api_key: str) -> Dict[str, Any]:
+    """
+    Fetch weather data from OpenWeatherMap.
+
+    Raises:
+        RuntimeError: If the API key is missing, city not found, or network/API issues occur.
+    """
     if not api_key:
         raise RuntimeError("Missing OPENWEATHER_API_KEY. See README for setup.")
+
     params = {"q": city, "appid": api_key, "units": "metric"}
     try:
         resp = requests.get(API_BASE, params=params, timeout=TIMEOUT)
     except requests.RequestException as exc:
         raise RuntimeError(f"Network error: {exc}") from exc
+
     if resp.status_code == 401:
         raise RuntimeError("Unauthorized (401): invalid API key.")
     if resp.status_code == 404:
@@ -45,6 +58,7 @@ def fetch_weather(city: str, api_key: str) -> Dict[str, Any]:
         except Exception:
             pass
         raise RuntimeError(f"OpenWeather error {resp.status_code}: {detail or 'Unexpected error.'}")
+
     try:
         return resp.json()
     except ValueError as exc:
@@ -52,6 +66,11 @@ def fetch_weather(city: str, api_key: str) -> Dict[str, Any]:
 
 
 def parse_weather(payload: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Extract key fields for reporting and CSV writing.
+    Returns:
+        Dict with keys: City, Country, Temperature (C), Humidity (%), Description
+    """
     try:
         city = payload["name"]
         country = payload["sys"]["country"]
@@ -71,6 +90,7 @@ def parse_weather(payload: Dict[str, Any]) -> Dict[str, str]:
 
 
 def ensure_csv_headers(path: Path) -> None:
+    """Create CSV with headers if not present or empty."""
     headers = ["City", "Country", "Temperature (C)", "Humidity (%)", "Description"]
     if not path.exists() or path.stat().st_size == 0:
         with path.open("w", newline="", encoding="utf-8") as f:
@@ -78,6 +98,7 @@ def ensure_csv_headers(path: Path) -> None:
 
 
 def write_row_to_csv(row: Dict[str, str], path: Path = CSV_PATH) -> None:
+    """Append a row to the CSV, ensuring headers exist."""
     ensure_csv_headers(path)
     with path.open("a", newline="", encoding="utf-8") as f:
         csv.writer(f).writerow(
@@ -86,7 +107,7 @@ def write_row_to_csv(row: Dict[str, str], path: Path = CSV_PATH) -> None:
 
 
 def summarize_csv(path: Path = CSV_PATH) -> Optional[str]:
-    """Return a string summary or None if file missing/empty."""
+    """Return a human-readable summary of the CSV contents, or None if empty/missing."""
     if not path.exists():
         return None
     with path.open("r", newline="", encoding="utf-8") as f:
@@ -101,8 +122,10 @@ def summarize_csv(path: Path = CSV_PATH) -> Optional[str]:
 
 
 def main() -> None:
+    """Entrypoint: prompt, fetch, parse, print, save, summarize."""
     city = get_city_input()
     api_key = os.getenv("OPENWEATHER_API_KEY", "")
+
     try:
         data = parse_weather(fetch_weather(city, api_key))
     except RuntimeError as err:
