@@ -1,19 +1,21 @@
 """
-reporter.py — Step 4
-- Adds parse_weather() to extract fields
-- Prints a clean summary to console
+reporter.py — Step 5
+- Adds CSV writing with headers using csv module
 """
 
 from __future__ import annotations
 
+import csv
 import os
 import sys
+from pathlib import Path
 from typing import Any, Dict
 
 import requests
 
 API_BASE = "https://api.openweathermap.org/data/2.5/weather"
-TIMEOUT = 10  # seconds
+TIMEOUT = 10
+CSV_PATH = Path("city_data.csv")
 
 
 def get_city_input() -> str:
@@ -50,7 +52,6 @@ def fetch_weather(city: str, api_key: str) -> Dict[str, Any]:
 
 
 def parse_weather(payload: Dict[str, Any]) -> Dict[str, str]:
-    """Return City, Country, Temperature (C), Humidity (%), Description."""
     try:
         city = payload["name"]
         country = payload["sys"]["country"]
@@ -69,6 +70,21 @@ def parse_weather(payload: Dict[str, Any]) -> Dict[str, str]:
     }
 
 
+def ensure_csv_headers(path: Path) -> None:
+    headers = ["City", "Country", "Temperature (C)", "Humidity (%)", "Description"]
+    if not path.exists() or path.stat().st_size == 0:
+        with path.open("w", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow(headers)
+
+
+def write_row_to_csv(row: Dict[str, str], path: Path = CSV_PATH) -> None:
+    ensure_csv_headers(path)
+    with path.open("a", newline="", encoding="utf-8") as f:
+        csv.writer(f).writerow(
+            [row["City"], row["Country"], row["Temperature (C)"], row["Humidity (%)"], row["Description"]]
+        )
+
+
 def main() -> None:
     city = get_city_input()
     api_key = os.getenv("OPENWEATHER_API_KEY", "")
@@ -84,6 +100,12 @@ def main() -> None:
         f"- Humidity: {data['Humidity (%)']}%\n"
         f"- Description: {data['Description']}\n"
     )
+
+    try:
+        write_row_to_csv(data, CSV_PATH)
+        print(f"Saved to {CSV_PATH.resolve()}")
+    except OSError as err:
+        print(f"[WARNING] Could not write to CSV: {err}")
 
 
 if __name__ == "__main__":
