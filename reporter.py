@@ -1,6 +1,6 @@
 """
-reporter.py — Step 5
-- Adds CSV writing with headers using csv module
+reporter.py — Step 6
+- Adds summarize_csv(): count rows and list city names with temperatures
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ import csv
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import requests
 
@@ -85,6 +85,21 @@ def write_row_to_csv(row: Dict[str, str], path: Path = CSV_PATH) -> None:
         )
 
 
+def summarize_csv(path: Path = CSV_PATH) -> Optional[str]:
+    """Return a string summary or None if file missing/empty."""
+    if not path.exists():
+        return None
+    with path.open("r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+    if not rows:
+        return None
+    lines = [f"Total entries: {len(rows)}"]
+    for r in rows:
+        lines.append(f"- {r.get('City','?')} — {r.get('Temperature (C)','?')} °C")
+    return "\n".join(lines)
+
+
 def main() -> None:
     city = get_city_input()
     api_key = os.getenv("OPENWEATHER_API_KEY", "")
@@ -106,6 +121,11 @@ def main() -> None:
         print(f"Saved to {CSV_PATH.resolve()}")
     except OSError as err:
         print(f"[WARNING] Could not write to CSV: {err}")
+
+    summary = summarize_csv(CSV_PATH)
+    if summary:
+        print("\nCSV Summary:")
+        print(summary)
 
 
 if __name__ == "__main__":
