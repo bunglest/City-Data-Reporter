@@ -1,8 +1,7 @@
 """
-reporter.py — Step 3
-- Adds fetch_weather() using OpenWeatherMap
-- Reads API key from OPENWEATHER_API_KEY
-- Handles 401/404/network errors
+reporter.py — Step 4
+- Adds parse_weather() to extract fields
+- Prints a clean summary to console
 """
 
 from __future__ import annotations
@@ -26,46 +25,65 @@ def get_city_input() -> str:
 
 
 def fetch_weather(city: str, api_key: str) -> Dict[str, Any]:
-    """Call OpenWeatherMap and return JSON or raise RuntimeError with a helpful message."""
     if not api_key:
         raise RuntimeError("Missing OPENWEATHER_API_KEY. See README for setup.")
-
     params = {"q": city, "appid": api_key, "units": "metric"}
     try:
         resp = requests.get(API_BASE, params=params, timeout=TIMEOUT)
     except requests.RequestException as exc:
         raise RuntimeError(f"Network error: {exc}") from exc
-
     if resp.status_code == 401:
         raise RuntimeError("Unauthorized (401): invalid API key.")
     if resp.status_code == 404:
         raise RuntimeError(f"City not found (404): '{city}'.")
     if not resp.ok:
-        # Try to include API error message if present
         detail = ""
         try:
             detail = resp.json().get("message", "")
         except Exception:
             pass
         raise RuntimeError(f"OpenWeather error {resp.status_code}: {detail or 'Unexpected error.'}")
-
     try:
         return resp.json()
     except ValueError as exc:
         raise RuntimeError("Response was not valid JSON.") from exc
 
 
+def parse_weather(payload: Dict[str, Any]) -> Dict[str, str]:
+    """Return City, Country, Temperature (C), Humidity (%), Description."""
+    try:
+        city = payload["name"]
+        country = payload["sys"]["country"]
+        temp_c = float(payload["main"]["temp"])
+        humidity = int(payload["main"]["humidity"])
+        description = str(payload["weather"][0]["description"])
+    except (KeyError, IndexError, TypeError, ValueError) as exc:
+        raise RuntimeError("API payload missing expected fields.") from exc
+
+    return {
+        "City": city,
+        "Country": country,
+        "Temperature (C)": f"{temp_c:.1f}",
+        "Humidity (%)": str(humidity),
+        "Description": description,
+    }
+
+
 def main() -> None:
     city = get_city_input()
     api_key = os.getenv("OPENWEATHER_API_KEY", "")
-
     try:
-        payload = fetch_weather(city, api_key)
-        print("Success! Raw payload received.")
-        print(str(payload)[:500] + ("..." if len(str(payload)) > 500 else ""))
+        data = parse_weather(fetch_weather(city, api_key))
     except RuntimeError as err:
         print(f"[ERROR] {err}")
         sys.exit(1)
+
+    print(
+        f"\nCurrent weather for {data['City']}, {data['Country']}:\n"
+        f"- Temperature: {data['Temperature (C)']} °C\n"
+        f"- Humidity: {data['Humidity (%)']}%\n"
+        f"- Description: {data['Description']}\n"
+    )
 
 
 if __name__ == "__main__":
